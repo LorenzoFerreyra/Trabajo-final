@@ -1,0 +1,190 @@
+---
+title: "Trabajo final, Análisis de datos I. UFLO"
+author: "Ferreyra, Lorenzo; González, Lucas"
+date: "`r Sys.Date()`"
+output: html_document
+---
+#Análisis bibliométrico del estudio de la inflación en publicaciones argentinas, con fuente en la base de datos de Scopus
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## Resumen 
+En este trabajo final de la materia Análisis de Datos I (UFLO), se realiza un análisis bibliométrico del estudio de la inflación en publicaciones argentinas, utilizando como fuente de datos la base de Scopus. Como objetivo principal, se tiene examinar las características de las publicaciones relacionadas con la inflación en Argentina, identificar las fuentes más frecuentes y los autores más productivos, y en la medida en que lo posibilita nuestra fuente explorar las tendencias a lo largo del tiempo.
+Para ello, se usó una metodología bibliométrica, con la que se analizó una muestra de artículos relacionados con la inflación en Argentina en la base de datos de Scopus. En ella se recopilan datos sobre autores, títulos, años de publicación, fuentes, palabras clave y afiliaciones, entre otras variables de interés.
+Los resultados revelaron que la investigación sobre la inflación en Argentina ha sido un tema de interés constante a lo largo de los años y que tuvo un aumento relativo en cantidad de publicaciones en los últimos años. Se identificaron fuentes y autores constantes y destacados en el campo, así como las palabras clave más frecuentes en los títulos y resúmenes de los artículos.
+El análisis bibliométrico nos dio un panorama general de la evolución y las características de la investigación sobre este fenómeno económico en nuestro país. Si bien es un primer acercamiento, los resultados son reveladores y pueden brindar una comprensión más profunda de los principales actores, tendencias y enfoques en el campo de estudio de la inflación en Argentina o acerca del país desde instituciones extranjeras.
+
+
+
+Importamos las dependencias necesarias.
+
+```{r cars}
+library(dplyr)
+library(ggplot2)
+library(tidytext)
+```
+
+Importamos el archivo fuente.
+
+```{r pressure, echo=FALSE}
+datos <- read.csv("inflation argentina - scopus.csv")
+
+```
+
+Usamos la función glimpse para ver por primera vez el contenido del csv.
+```{r}
+glimpse(datos)
+
+```
+```{r}
+summary(datos)
+```
+Como existen varios registros que contienen publicaciones que no están relacionadas con la inflación, filtramos los datos para quedarnos con aquellos que tienen las palabras clave "inflación" o "Argentina".
+```{r}
+datos <- datos[grepl("(?i)inflation|argentina|inflación", datos$Author.Keywords), ]
+```
+
+
+Empezamos a contestar algunas preguntas con el dataset.
+Por ejemplo, ¿cuántas publicaciones hubo por año relacionadas con la inflación en Argentina?
+
+```{r}
+publicaciones_anuales <- datos %>%
+  group_by(Year) %>%
+  summarise(Num_Publicaciones = n())
+print(publicaciones_anuales)
+```
+```{r}
+histograma_inflacion <- ggplot(data = publicaciones_anuales, aes(x = Year, y = Num_Publicaciones)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  xlab("Año") +
+  ylab("Cantidad de publicaciones") +
+  ggtitle("Progresión de publicaciones sobre inflación en Argentina") +
+  theme_minimal()
+```
+
+En este gráfico, vemos que, especialmente a partir de 2015, se observa un crecimiento moderado en la publicación de trabajos sobre la inflación en Argentina.
+
+```{r}
+print(histograma_inflacion)
+```
+¿Cuáles fueron los autores que tuvieron más publicaciones?
+
+```{r}
+top_autores <- datos %>%
+  count(Authors, sort = TRUE) %>%
+  head(3)
+print(top_autores)
+```
+¿Cuáles son las fuentes de las publicaciones? Vemos que el Journal of Monetary Economics es una fuente importante que concentra la mayor cantidad de artículos frente a algunas otras fuentes independientes y dispersas.
+
+```{r}
+
+publicaciones_por_fuente <- datos %>%
+  count(`Source.title`, sort = TRUE)
+
+
+fuente_publicaciones <- ggplot(data = head(publicaciones_por_fuente, 10),
+                              aes(x = reorder(`Source.title`, n), y = n)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  xlab("Fuente") +
+  ylab("Número de publicaciones") +
+  ggtitle("Top 10 de fuentes de publicaciones sobre inflación en Argentina") +
+  coord_flip() +
+  theme(axis.text.y = element_text(size = 8), 
+        axis.text.x = element_text(angle = 90, hjust = 1))
+
+print(fuente_publicaciones)
+
+```
+¿Qué palabras clave son más comunes en los abstract?
+
+```{r}
+prepositions <- c("at", "by", "for", "from", "in", "into", "of", "on", "to", "with", "the", "and", "a", "this", "are","as","is","an", "it","that", "we", "an", "be", "its", "these")
+
+
+palabras_clave <- datos %>%
+  select(Abstract) %>%
+  unnest_tokens(word, Abstract) %>% 
+  anti_join(data.frame(word = prepositions), by = "word")
+
+frecuencia_palabras <- palabras_clave %>%
+  count(word, sort = TRUE)
+
+top_palabras <- head(frecuencia_palabras, 10)
+print(top_palabras)
+```
+¿Cuáles son las palabras clave de indexación más propuestas por los motores como Scopus para los artículos?
+
+
+```{r}
+palabras_indices <- datos %>%
+  select(Index.Keywords) %>%
+  unnest_tokens(word, Index.Keywords) %>% 
+  anti_join(data.frame(word = prepositions), by = "word")
+
+frecuencia_index <- palabras_indices %>%
+  count(word, sort = TRUE)
+
+top_palabras <- head(frecuencia_index, 10)
+print(top_palabras)
+```
+¿Cuál es el número promedio de citas por artículo?
+
+```{r}
+promedio_citas <- mean(datos$Cited.by, na.rm = TRUE)
+print(promedio_citas)
+```
+Al obtener la media, observamos claramente una concentración de los datos por encima de ella. En otras palabras,  es una distribución sesgada hacia la derecha, asimétrica positiva. Así, la cola de la distribución se extiende hacia la derecha, lo que indica que hay valores atípicos o extremos en el extremo superior de la escala y que parece haber un número considerable de artículos con un número alto de citas.
+```{r}
+hist(datos$Cited.by, xlab = "Citas por artículo", ylab = "Frecuencia",
+     main = "Distribución de Citas por Artículo")
+abline(v = mean(datos$Cited.by, na.rm = TRUE), col = "red")
+```
+
+¿Cuáles son los títulos de los artículos más citados entre todos los registros de nuestro estudio?
+
+```{r}
+articulos_citados <- datos[order(-datos$Cited.by), ]
+top_citados <- head(articulos_citados, 5)
+print(top_citados$Title)
+```
+¿Cuáles son los idiomas predominantes en los documentos originales?
+Vemos que la inmensa mayoría de los artículos se escriben en inglés.
+
+```{r}
+
+frecuencia_idiomas <- table(datos$`Language.of.Original.Document`)
+sorted_frecuencia <- sort(frecuencia_idiomas, decreasing = TRUE)
+
+barplot(sorted_frecuencia, main = "Comparación de idiomas utilizados en los artículos",
+        xlab = "Idioma", ylab = "Frecuencia", col = "steelblue")
+
+
+
+```
+
+¿Cuáles son las editoriales más comunes entre las publicaciones en cuestión?
+
+```{r}
+tabla_editoriales <- table(datos$Publisher)
+tabla_top_editoriales <- head(sort(tabla_editoriales, decreasing = TRUE), 10)
+print(tabla_editoriales)
+```
+
+
+
+```{r}
+editoriales <- table(datos$Publisher)
+top_editoriales <- head(sort(editoriales, decreasing = TRUE), 10)
+
+barplot(top_editoriales, main = "Editoriales más comunes",
+        xlab = "Editorial", ylab = "Frecuencia",
+        col = "steelblue", las = 2)
+
+
+```
+
+
+
